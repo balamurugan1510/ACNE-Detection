@@ -1,0 +1,67 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: acneuser
+      POSTGRES_PASSWORD: acnepass
+      POSTGRES_DB: acnetracker
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U acneuser -d acnetracker"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql://acneuser:acnepass@db:5432/acnetracker
+      SECRET_KEY: change_this_to_a_secure_random_key_at_least_32_chars_long_prod
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: "10080"
+      UPLOAD_DIR: /app/uploads
+      ROBOFLOW_API_URL: https://serverless.roboflow.com
+      ROBOFLOW_API_KEY: 
+      ROBOFLOW_WORKSPACE_NAME: 
+      # Direct model inference (default). Replace with your Deploy model id from Roboflow (project/version).
+      ROBOFLOW_MODEL_ID: my-first-project-soi1o/1
+      ROBOFLOW_USE_WORKFLOW: "false"
+      ROBOFLOW_CONFIDENCE_THRESHOLD: "0.01"
+      ROBOFLOW_MAX_DETECTIONS: "300"
+      ROBOFLOW_WORKFLOW_ID: detect-count-and-visualize
+    volumes:
+      - uploads_data:/app/uploads
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ""
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+  # nginx:
+  #   image: nginx:alpine
+  #   ports:
+  #     - "80:80"
+  #   volumes:
+  #     - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+  #   depends_on:
+  #     - backend
+  #     - frontend
+
+volumes:
+  postgres_data:
+  uploads_data:
